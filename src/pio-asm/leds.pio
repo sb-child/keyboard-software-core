@@ -1,0 +1,62 @@
+; ws2812b led controller
+; line 1 (GPIO27): 36 leds
+; line 2 (GPIO28): 48 leds
+; line 3 (GPIO29): 26 leds
+
+.program led_ctrl
+
+.side_set 1
+
+.define public NOF_CYCLES_FOR_1_BIT  (3+2+5)
+
+.lang_opt python sideset_init = pico.PIO.OUT_HIGH
+.lang_opt python out_init     = pico.PIO.OUT_HIGH
+.lang_opt python out_shiftdir = 1
+
+.wrap_target
+bitloop:
+    out x, 1       side 0 [2]   ; [3] Side-set still takes place when instruction stalls
+    jmp !x do_zero side 1 [2]   ; [2] Branch on the bit we shifted out. Positive pulse
+do_one:
+    jmp  bitloop   side 1 [3]   ; [5] Continue driving high, for a long pulse
+do_zero:
+    nop            side 0 [3]   ; [5] Or drive low, for a short pulse
+.wrap
+
+; keyboard scanner
+; M2_IN_1 GPIO06
+; M2_IN_2 GPIO07
+; M2_IN_3 GPIO08
+; M2_IN_4 GPIO09
+; M2_IN_5 GPIO10
+; M2_IN_6 GPIO11
+; M2_OUT_1 GPIO12
+; M2_OUT_2 GPIO13
+; M2_OUT_3 GPIO14
+; M2_OUT_4 GPIO15
+; M2_OUT_5 GPIO16
+; M2_OUT_6 GPIO17
+; M2_OUT_7 GPIO18
+; M2_OUT_8 GPIO19
+
+.program kbd_scan
+
+.side_set 1
+
+.wrap_target
+irq wait 0 side 0
+set pins, 0b00001 side 0 [3]
+in pins, 8 side 0 ; 8
+set pins, 0b00010 side 0 [3]
+in pins, 8 side 0 ; 16
+set pins, 0b00100 side 0 [3]
+in pins, 8 side 0 ; 24
+set pins, 0b01000 side 0 [3]
+in pins, 8 side 0 ; 32 -> autopush
+set pins, 0b10000 side 0 [3]
+in pins, 8 side 0 ; 40
+set pins, 0b00000 side 1 [3]
+in pins, 8 side 1 ; 48
+in null, 8 side 0 ; 56
+in null, 8 side 0 ; 64 -> autopush
+.wrap
