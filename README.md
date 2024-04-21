@@ -16,7 +16,7 @@ hardware part
     - [ ] example code with DMA
     - [ ] high-level abstraction
   - [ ] key scanner
-    - [ ] example code
+    - [x] example code
     - [ ] high-level abstraction
   - [ ] USB HID
     - [ ] example code

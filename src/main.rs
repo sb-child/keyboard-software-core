@@ -15,10 +15,12 @@ use rp2040_hal::{
   adc,
   clocks::init_clocks_and_plls,
   dma::{single_buffer, DMAExt},
+  fugit::RateExtU32,
   gpio,
   multicore::{Multicore, Stack},
-  pac, pio,
-  pio::PIOExt,
+  pac,
+  pio::{self, PIOExt},
+  uart::{self, DataBits, StopBits, UartConfig},
   Clock, Sio, Watchdog,
 };
 
@@ -67,9 +69,28 @@ fn main() -> ! {
   let pins = gpio::Pins::new(pac.IO_BANK0, pac.PADS_BANK0, sio.gpio_bank0, &mut pac.RESETS);
   let mut dma = pac.DMA.split(&mut pac.RESETS);
 
+  // uart
+  let uart0_pins = (
+    pins.gpio0.into_function(), // tx
+    pins.gpio1.into_function(), // rx
+  );
+  let uart1_pins = (
+    pins.gpio4.into_function(), // tx
+    pins.gpio5.into_function(), // rx
+  );
+  let (mut uart0_rx, mut uart0_tx) = uart::UartPeripheral::new(pac.UART0, uart0_pins, &mut pac.RESETS)
+    .enable(UartConfig::new(115200.Hz(), DataBits::Eight, None, StopBits::One), clocks.peripheral_clock.freq())
+    .unwrap()
+    .split();
+  let (mut uart1_rx, mut uart1_tx) = uart::UartPeripheral::new(pac.UART1, uart1_pins, &mut pac.RESETS)
+    .enable(UartConfig::new(115200.Hz(), DataBits::Eight, None, StopBits::One), clocks.peripheral_clock.freq())
+    .unwrap()
+    .split();
+
   let mut led_pin = pins.gpio26.into_push_pull_output();
 
   led_pin.set_high().unwrap();
+  // delay.delay_ms(1000);
 
   // PIO0
   let (mut pio0, pio0_sm0, pio0_sm1, pio0_sm2, pio0_sm3) = pac.PIO0.split(&mut pac.RESETS);
@@ -169,6 +190,8 @@ fn main() -> ! {
   let mut pio0_led_line1_dma_buf = singleton!(: [u32; 36] = [0; 36]).unwrap();
   let mut pio0_led_line2_dma_buf = singleton!(: [u32; 48] = [0; 48]).unwrap();
   let mut pio0_led_line3_dma_buf = singleton!(: [u32; 26] = [0; 26]).unwrap();
+  let mut key_1_dma_buf = singleton!(: [u8; 6] = [0; 6]).unwrap();
+  let mut key_3_dma_buf = singleton!(: [u8; 6] = [0; 6]).unwrap();
 
   // PIO1
   let (mut pio1, pio1_sm0, pio1_sm1, pio1_sm2, pio1_sm3) = pac.PIO1.split(&mut pac.RESETS);
@@ -217,7 +240,11 @@ fn main() -> ! {
       led_pin.set_low().unwrap();
     }
     let alpha = x; // (255.0 * x) as u8;
+
+    // 触发键盘扫描
     pio0.clear_irq(0b00000001); // 清除中断, 触发键盘扫描
+    uart0_tx.write_raw(&[123]).unwrap(); // area 1
+    uart1_tx.write_raw(&[123]).unwrap(); // area 3
 
     {
       // 设置初值
@@ -234,10 +261,14 @@ fn main() -> ! {
       let pio0_led_line1_dma = single_buffer::Config::new(dma.ch0, pio0_led_line1_dma_buf, pio0_sm0_tx).start();
       let pio0_led_line2_dma = single_buffer::Config::new(dma.ch1, pio0_led_line2_dma_buf, pio0_sm1_tx).start();
       let pio0_led_line3_dma = single_buffer::Config::new(dma.ch2, pio0_led_line3_dma_buf, pio0_sm2_tx).start();
+      let key_1_dma = single_buffer::Config::new(dma.ch3, uart0_rx, key_1_dma_buf).start();
+      let key_3_dma = single_buffer::Config::new(dma.ch4, uart1_rx, key_3_dma_buf).start();
       // 去忙别的...
       (dma.ch0, pio0_led_line1_dma_buf, pio0_sm0_tx) = pio0_led_line1_dma.wait();
       (dma.ch1, pio0_led_line2_dma_buf, pio0_sm1_tx) = pio0_led_line2_dma.wait();
       (dma.ch2, pio0_led_line3_dma_buf, pio0_sm2_tx) = pio0_led_line3_dma.wait();
+      (dma.ch3, uart0_rx, key_1_dma_buf) = key_1_dma.wait();
+      (dma.ch4, uart1_rx, key_3_dma_buf) = key_3_dma.wait();
     }
 
     // for _ in 0..5 {
