@@ -1,0 +1,80 @@
+; from https://github.com/wahlencraft/TM1637-pico/blob/master/src/PicoTM1637.pio
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; PROGRAM OVERVIEW:
+;
+; START   * SET (write mode or display controll)
+; SHIFT   *
+; ACK     *
+; STOP    *
+;  if OSR EMPTY DONE
+; START   - SET ADDRESS 
+; SHIFT   -
+; ACK     -
+; SHIFT   * SEND DATA
+; ACK     *
+; STOP    *
+;  if OSR NOT EMPTY SEND DATA AGAIN
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+.program tm1637
+.side_set 1 opt 
+
+
+set pins, 1 side 1
+_start:
+
+   pull block
+
+; SET WRITE MODE / DISPLAY CONTROLL
+_startCond:
+   set x, 7
+   set pins, 1  side 1 [7]
+   set pins, 0
+   set pins, 0  side 0
+
+_bitShiftLoop:
+   out pins, 1  side 0 
+   nop          side 1
+   jmp x-- _bitShiftLoop side 0
+
+_ackCond:
+   set pins, 0  side 0
+   nop          side 1
+   nop          side 0 [1]
+
+_stopCond:
+   set pins, 0  side 1
+   set pins, 1  side 1
+
+   jmp !osre _startCond_sendDigit  ; If there only was 1 byte of data in OSR
+                                   ; end here, otherwise continue and send data  
+   jmp _start                      
+
+; SET ADDRESS, SEND DATA
+_startCond_sendDigit:
+   set pins, 1 side 1 [7]
+   set pins, 0
+   set pins, 0 side 0
+
+_sendCmdAndData:
+   set x, 7
+_bitShiftLoop_sendDigit:
+   out pins, 1 side 0 
+   nop side 1
+   jmp x-- _bitShiftLoop_sendDigit side 0   
+
+_ackCond_sendDigit:
+   set pins, 0 side 0
+   set y, 1 side 1  ; think of as nop. This is to save an instruction later.
+   nop side 0 [1]
+
+   ; If there is data left continue sending digits
+   jmp !osre _sendCmdAndData
+
+_stopCond_sendDigit:
+   set pins, 0 side 1
+   set pins, 1 side 1
+
+; Send back message to program indicating that we're done
+   in y, 0;
+   push noblock;

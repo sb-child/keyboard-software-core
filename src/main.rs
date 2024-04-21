@@ -99,35 +99,35 @@ fn main() -> ! {
   pio0.irq0().enable_sm_interrupt(3);
   // led ctrl (1)
   let (mut pio0_sm0, _, mut pio0_sm0_tx) = pio::PIOBuilder::from_installed_program(pio0_installed_sm0)
-    .set_pins(27, 1)
+    .set_pins(27, 1) // _pio0_led0
     .autopull(true)
     .pull_threshold(24)
     .in_shift_direction(pio::ShiftDirection::Left)
     .out_shift_direction(pio::ShiftDirection::Left)
     .buffers(pio::Buffers::OnlyTx)
-    .side_set_pin_base(27)
+    .side_set_pin_base(27) // _pio0_led0
     .clock_divisor_fixed_point(15, 160) // 125 MHz / 15.625 = 0.125 us
     .build(pio0_sm0);
   // led ctrl (2)
   let (mut pio0_sm1, _, mut pio0_sm1_tx) = pio::PIOBuilder::from_installed_program(pio0_installed_sm1)
-    .set_pins(28, 1)
+    .set_pins(28, 1) // _pio0_led1
     .autopull(true)
     .pull_threshold(24)
     .in_shift_direction(pio::ShiftDirection::Left)
     .out_shift_direction(pio::ShiftDirection::Left)
     .buffers(pio::Buffers::OnlyTx)
-    .side_set_pin_base(28)
+    .side_set_pin_base(28) // _pio0_led1
     .clock_divisor_fixed_point(15, 160)
     .build(pio0_sm1);
   // led ctrl (3)
   let (mut pio0_sm2, _, mut pio0_sm2_tx) = pio::PIOBuilder::from_installed_program(pio0_installed_sm2)
-    .set_pins(29, 1)
+    .set_pins(29, 1) // _pio0_led2
     .autopull(true)
     .pull_threshold(24)
     .in_shift_direction(pio::ShiftDirection::Left)
     .out_shift_direction(pio::ShiftDirection::Left)
     .buffers(pio::Buffers::OnlyTx)
-    .side_set_pin_base(29)
+    .side_set_pin_base(29) // _pio0_led2
     .clock_divisor_fixed_point(15, 160)
     .build(pio0_sm2);
   // kbd scan (2)
@@ -169,6 +169,31 @@ fn main() -> ! {
   let mut pio0_led_line1_dma_buf = singleton!(: [u32; 36] = [0; 36]).unwrap();
   let mut pio0_led_line2_dma_buf = singleton!(: [u32; 48] = [0; 48]).unwrap();
   let mut pio0_led_line3_dma_buf = singleton!(: [u32; 26] = [0; 26]).unwrap();
+
+  // PIO1
+  let (mut pio1, pio1_sm0, pio1_sm1, pio1_sm2, pio1_sm3) = pac.PIO1.split(&mut pac.RESETS);
+  let _pio1_tm1637_data: gpio::Pin<_, gpio::FunctionPio0, _> = pins.gpio2.into_function();
+  let _pio1_tm1637_clk: gpio::Pin<_, gpio::FunctionPio0, _> = pins.gpio3.into_function();
+  let pio1_prog_tm1637 = pio_file!("src/pio-asm/tm1637.pio", select_program("tm1637"),);
+  let pio1_installed_sm0 = pio1.install(&pio1_prog_tm1637.program).unwrap();
+  // tm1637
+  let (mut pio1_sm0, _, mut pio1_sm0_tx) = pio::PIOBuilder::from_installed_program(pio1_installed_sm0)
+  .set_pins(2, 1) // _pio1_tm1637_data
+  .out_pins(2, 1) // _pio1_tm1637_data
+  // .autopull(true)
+  .pull_threshold(32)
+  .out_shift_direction(pio::ShiftDirection::Right)
+  .buffers(pio::Buffers::OnlyTx)
+  .side_set_pin_base(3) // _pio1_tm1637_clk
+  .clock_divisor_fixed_point(2800, 128) // 125 MHz / 2800.5 = 22.404 us
+  .build(pio1_sm0);
+  pio1_sm0.set_pindirs([(2, pio::PinDir::Output), (3, pio::PinDir::Output)]);
+  pio1_sm0.set_pins([(2, pio::PinState::Low), (3, pio::PinState::Low)]);
+  pio1_sm0.start();
+  // FIXME: this won't work because of hardware issue
+  pio1_sm0_tx.write(0xffc0448a);
+  pio1_sm0_tx.write(0xffc1448a);
+  pio1_sm0_tx.write(0xffc2448a);
 
   led_pin.set_high().unwrap();
 

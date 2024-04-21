@@ -12,6 +12,9 @@ hardware part
   - [ ] ws2812b led driver
     - [x] example code with DMA
     - [ ] high-level abstraction
+  - [ ] tm1637 driver (blocking because of hardware issue)
+    - [ ] example code with DMA
+    - [ ] high-level abstraction
   - [ ] key scanner
     - [ ] example code
     - [ ] high-level abstraction
